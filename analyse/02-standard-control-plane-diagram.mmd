@@ -1,0 +1,57 @@
+flowchart TD
+    subgraph KERNEL["KERNEL SPACE - eBPF Plugins"]
+        P1["🔌 Packet Parser"]
+        P2["🔌 DNS"]
+        P3["🔌 Drop Reason"]
+        P4["🔌 Linux Util"]
+        
+        MAP1["📊 eBPF Maps"]
+        MAP2["📊 eBPF Maps"]
+        MAP3["📊 eBPF Maps"]
+        MAP4["📊 eBPF Maps"]
+        
+        PERF["⚡ Perf Array<br/>(per-CPU buffers)"]
+        
+        P1 --> MAP1
+        P2 --> MAP2
+        P3 --> MAP3
+        P4 --> MAP4
+        MAP1 --> PERF
+        MAP2 --> PERF
+        MAP3 --> PERF
+        MAP4 --> PERF
+    end
+    
+    subgraph USER["USER SPACE"]
+        PM["⚙️ Plugin Manager"]
+        
+        subgraph CONTROL["CONTROL PLANE"]
+            E["🧠 Enricher"]
+            C["💾 Cache<br/>(IP → K8s objects)"]
+            MM["📈 Metrics Module"]
+            FM["🔽 Filter Manager"]
+            PROM["📊 Prometheus<br/>:9965"]
+        end
+        
+        PERF -->|read events| PM
+        PM -->|manage plugins| P1
+        PM -->|manage plugins| P2
+        PM -->|manage plugins| P3
+        PM -->|manage plugins| P4
+    end
+    
+    subgraph OUTPUT["OUTPUT"]
+        GRAFANA["📊 Grafana"]
+    end
+    
+    E -->|write enriched flows| MM
+    E -->|lookup IP context| C
+    MM -->|read enriched flows| E
+    MM -->|filter pods/namespaces| FM
+    MM -->|export metrics| PROM
+    PROM -->|visualize| GRAFANA
+    
+    style KERNEL fill:#ffcccc
+    style USER fill:#ccffcc
+    style CONTROL fill:#ccccff
+    style OUTPUT fill:#ffffcc

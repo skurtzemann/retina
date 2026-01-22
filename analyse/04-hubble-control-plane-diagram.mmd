@@ -1,0 +1,65 @@
+flowchart TD
+    subgraph KERNEL["KERNEL SPACE - eBPF Plugins"]
+        P1["🔌 packetparser"]
+        P2["🔌 dns"]
+        P3["🔌 dropreason"]
+        P4["🔌 linuxutil"]
+        
+        MAPS_ICON["📊 eBPF Maps"]
+        PERF["⚡ perf_event_array"]
+        
+        P1 --> MAPS_ICON
+        P2 --> MAPS_ICON
+        P3 --> MAPS_ICON
+        P4 --> MAPS_ICON
+        MAPS_ICON --> PERF
+    end
+    
+    subgraph USER["USER SPACE"]
+        PM["⚙️ Plugin Manager"]
+        
+        subgraph HUBBLE["HUBBLE CONTROL PLANE"]
+            EXT_CH["📨 External Channel<br/>(plugin output)"]
+            MA["🖥️ Monitor Agent<br/>- Listeners/Consumers<br/>- Event forwarding"]
+            HO["🔭 Hubble Observer<br/>- Parsers (L4/DNS/Drop)<br/>- K8s enrichment<br/>(Cilium libraries)"]
+            
+            subgraph OUTPUT["Output Endpoints"]
+                PROM["📊 :9965<br/>Prometheus<br/>(hubble_*)"]
+                RELAY["🔗 :4244<br/>Hubble Relay<br/>(flow logs)"]
+                SOCK["🔌 unix:///<br/>var/run/cilium/<br/>hubble.sock"]
+            end
+            
+            subgraph TOOLS["Hubble Tools"]
+                CLI["💻 Hubble CLI<br/>Real-time flows"]
+                UI["🖼️ Hubble UI<br/>Service map"]
+            end
+            
+            EXT_CH --> MA
+            MA --> HO
+            MA -->|register consumer| HO
+            HO --> PROM
+            HO --> RELAY
+            HO --> SOCK
+            RELAY --> CLI
+            RELAY --> UI
+        end
+        
+        PERF -->|write events| PM
+        PM --> P1
+        PM --> P2
+        PM --> P3
+        PM --> P4
+    end
+    
+    subgraph EXTERNAL["External Tools"]
+        GRAFANA["📊 Grafana"]
+    end
+    
+    PROM -->|visualize| GRAFANA
+    
+    style KERNEL fill:#ffcccc
+    style USER fill:#ccffcc
+    style HUBBLE fill:#ccccff
+    style OUTPUT fill:#ffffcc
+    style TOOLS fill:#e6ccff
+    style EXTERNAL fill:#ffe6cc

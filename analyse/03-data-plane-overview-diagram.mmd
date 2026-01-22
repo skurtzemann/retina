@@ -1,0 +1,62 @@
+flowchart TD
+    subgraph KERNEL["KERNEL SPACE"]
+        subgraph HOOKS["eBPF Hook Points"]
+            TC_ING["🔌 tc/ingress<br/>bpf prog"]
+            TC_EG["🔌 tc/egress<br/>bpf prog"]
+            KPROBE["🔌 kprobes<br/>bpf prog"]
+        end
+        
+        subgraph MAPS["eBPF Maps"]
+            MAPS_ICON["📊 eBPF Maps<br/>- packet counts<br/>- drop reasons<br/>- DNS queries<br/>- TCP stats<br/>- conntrack"]
+        end
+        
+        PERF["⚡ perf_event_array<br/>(per-CPU buffers)"]
+        
+        TC_ING --> MAPS_ICON
+        TC_EG --> MAPS_ICON
+        KPROBE --> MAPS_ICON
+        MAPS_ICON --> PERF
+    end
+    
+    subgraph USER["USER SPACE"]
+        PM["⚙️ Plugin Manager<br/>- Lifecycle mgmt<br/>- eBPF compile<br/>- Reconciliation"]
+        
+        subgraph PLUGINS["Plugins"]
+            P1["🔌 packetparser"]
+            P2["🔌 dns"]
+            P3["🔌 dropreason"]
+            P4["🔌 linuxutil"]
+            P5["🔌 tcpretrans"]
+            P6["🔌 conntrack"]
+            P7["🔌 hnsstats<br/>(Windows)"]
+        end
+        
+        FLOWS["📦 flow objects<br/>(Cilium proto)"]
+        
+        PERF -->|read events| PM
+        PM --> P1
+        PM --> P2
+        PM --> P3
+        PM --> P4
+        PM --> P5
+        PM --> P6
+        PM --> P7
+        P1 --> FLOWS
+        P2 --> FLOWS
+        P3 --> FLOWS
+        P4 --> FLOWS
+        P5 --> FLOWS
+        P6 --> FLOWS
+        P7 --> FLOWS
+    end
+    
+    OUTPUT["🎯 CONTROL PLANE<br/>(Enricher)"]
+    
+    FLOWS --> OUTPUT
+    
+    style KERNEL fill:#ffcccc
+    style USER fill:#ccffcc
+    style HOOKS fill:#ffe6cc
+    style MAPS fill:#e6ccff
+    style PLUGINS fill:#ccffff
+    style OUTPUT fill:#ffffcc
