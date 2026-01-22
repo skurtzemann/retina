@@ -1,38 +1,51 @@
 flowchart TD
     subgraph KERNEL["KERNEL SPACE"]
-        subgraph HOOKS["eBPF Hook Points"]
-            TC_ING["🔌 tc/ingress<br/>bpf prog"]
-            TC_EG["🔌 tc/egress<br/>bpf prog"]
-            KPROBE["🔌 kprobes<br/>bpf prog"]
+        subgraph HOOKS["eBPF Programs (from _cprog/)"]
+            TC_ING["🔌 tc/ingress<br/>packetparser"]
+            TC_EG["🔌 tc/egress<br/>packetparser"]
+            KPROBE_DROP["🔌 kprobes<br/>dropreason"]
+            KPROBE_TCP["🔌 kprobes<br/>tcpretrans"]
+            KPROBE_CT["🔌 kprobes<br/>conntrack"]
         end
-        
+
         subgraph MAPS["eBPF Maps"]
             MAPS_ICON["📊 eBPF Maps<br/>- packet counts<br/>- drop reasons<br/>- DNS queries<br/>- TCP stats<br/>- conntrack"]
         end
-        
+
         PERF["⚡ perf_event_array<br/>(per-CPU buffers)"]
-        
+
         TC_ING --> MAPS_ICON
         TC_EG --> MAPS_ICON
-        KPROBE --> MAPS_ICON
+        KPROBE_DROP --> MAPS_ICON
+        KPROBE_TCP --> MAPS_ICON
+        KPROBE_CT --> MAPS_ICON
         MAPS_ICON --> PERF
     end
-    
+
     subgraph USER["USER SPACE"]
-        PM["⚙️ Plugin Manager<br/>- Lifecycle mgmt<br/>- eBPF compile<br/>- Reconciliation"]
-        
-        subgraph PLUGINS["Plugins"]
-            P1["🔌 packetparser"]
-            P2["🔌 dns"]
-            P3["🔌 dropreason"]
-            P4["🔌 linuxutil"]
-            P5["🔌 tcpretrans"]
-            P6["🔌 conntrack"]
-            P7["🔌 hnsstats<br/>(Windows)"]
+        PM["⚙️ Plugin Manager<br/>- Compiles eBPF C code<br/>- Loads eBPF programs<br/>- Lifecycle mgmt"]
+
+        subgraph PLUGINS["Plugins (Go code)"]
+            P1["🔌 packetparser<br/>(manages tc programs)"]
+            P2["🔌 dns<br/>(Inspektor Gadget)"]
+            P3["🔌 dropreason<br/>(manages kprobes)"]
+            P4["🔌 linuxutil<br/>(netstats/ethtool)"]
+            P5["🔌 tcpretrans<br/>(manages kprobes)"]
+            P6["🔌 conntrack<br/>(manages kprobes)"]
+            P7["🔌 hnsstats<br/>(Windows API)"]
         end
-        
+
+        subgraph EBPF_COMP["eBPF Compilation"]
+            COMPILE["🔨 clang compile<br/>bpf2go"]
+        end
+
+        subgraph CONTROL["CONTROL PLANE"]
+            ENRICHER["🧠 Enricher<br/>- K8s context (IP→Pod)<br/>- IP cache"]
+            METRICS["📈 Metrics Module<br/>- Prometheus metrics<br/>- :9965"]
+        end
+
         FLOWS["📦 flow objects<br/>(Cilium proto)"]
-        
+
         PERF -->|read events| PM
         PM --> P1
         PM --> P2
@@ -41,6 +54,14 @@ flowchart TD
         PM --> P5
         PM --> P6
         PM --> P7
+
+        PM -.->|compiles & loads| COMPILE
+        COMPILE -.->|deploys to| TC_ING
+        COMPILE -.->|deploys to| TC_EG
+        COMPILE -.->|deploys to| KPROBE_DROP
+        COMPILE -.->|deploys to| KPROBE_TCP
+        COMPILE -.->|deploys to| KPROBE_CT
+
         P1 --> FLOWS
         P2 --> FLOWS
         P3 --> FLOWS
@@ -48,15 +69,24 @@ flowchart TD
         P5 --> FLOWS
         P6 --> FLOWS
         P7 --> FLOWS
+
+        FLOWS -->|enriches| ENRICHER
+        ENRICHER -->|exports| METRICS
     end
-    
-    OUTPUT["🎯 CONTROL PLANE<br/>(Enricher)"]
-    
-    FLOWS --> OUTPUT
-    
+
+    subgraph EXTERNAL["EXTERNAL TOOLS"]
+        GRAFANA["📊 Grafana"]
+    end
+
+    METRICS -->|visualize| GRAFANA
+
     style KERNEL fill:#ffcccc
     style USER fill:#ccffcc
     style HOOKS fill:#ffe6cc
     style MAPS fill:#e6ccff
     style PLUGINS fill:#ccffff
-    style OUTPUT fill:#ffffcc
+    style EBPF_COMP fill:#ffffcc
+    style CONTROL fill:#ccccff
+    style ENRICHER fill:#ffcccc
+    style EXTERNAL fill:#ffe6cc
+    style METRICS fill:#ffcccc
