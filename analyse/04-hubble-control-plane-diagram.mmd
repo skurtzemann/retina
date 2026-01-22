@@ -29,19 +29,12 @@ flowchart TD
                 SOCK["🔌 unix:///<br/>var/run/cilium/<br/>hubble.sock"]
             end
             
-            subgraph TOOLS["Hubble Tools"]
-                CLI["💻 Hubble CLI<br/>Real-time flows"]
-                UI["🖼️ Hubble UI<br/>Service map"]
-            end
-            
             EXT_CH --> MA
             MA --> HO
             MA -->|register consumer| HO
             HO --> PROM
             HO --> RELAY
             HO --> SOCK
-            RELAY --> CLI
-            RELAY --> UI
         end
         
         PERF -->|write events| PM
@@ -51,15 +44,22 @@ flowchart TD
         PM --> P4
     end
     
-    subgraph EXTERNAL["External Tools"]
+    subgraph HUBBLE_TOOLS["HUBBLE TOOLS"]
+        CLI["💻 Hubble CLI<br/>Real-time flows"]
+        UI["🖼️ Hubble UI<br/>Service map"]
+    end
+    
+    subgraph EXTERNAL["EXTERNAL TOOLS"]
         GRAFANA["📊 Grafana"]
     end
     
+    RELAY --> CLI
+    RELAY --> UI
     PROM -->|visualize| GRAFANA
     
     style KERNEL fill:#ffcccc
     style USER fill:#ccffcc
     style HUBBLE fill:#ccccff
     style OUTPUT fill:#ffffcc
-    style TOOLS fill:#e6ccff
+    style HUBBLE_TOOLS fill:#e6ccff
     style EXTERNAL fill:#ffe6cc
