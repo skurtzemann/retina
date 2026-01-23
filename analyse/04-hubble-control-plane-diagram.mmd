@@ -1,0 +1,111 @@
+flowchart TD
+    subgraph KERNEL["KERNEL SPACE"]
+        subgraph HOOKS["eBPF Programs (from _cprog/)"]
+            TC_ING["🔌 tc/ingress<br/>packetparser"]
+            TC_EG["🔌 tc/egress<br/>packetparser"]
+            KPROBE_DROP["🔌 kprobes<br/>dropreason"]
+            KPROBE_TCP["🔌 kprobes<br/>tcpretrans"]
+            KPROBE_CT["🔌 kprobes<br/>conntrack"]
+        end
+        
+        subgraph MAPS["eBPF Maps"]
+            MAPS_ICON["📊 eBPF Maps<br/>- packet counts<br/>- drop reasons<br/>- DNS queries<br/>- TCP stats<br/>- conntrack"]
+        end
+        
+        PERF["⚡ perf_event_array<br/>(per-CPU buffers)"]
+        
+        TC_ING --> MAPS_ICON
+        TC_EG --> MAPS_ICON
+        KPROBE_DROP --> MAPS_ICON
+        KPROBE_TCP --> MAPS_ICON
+        KPROBE_CT --> MAPS_ICON
+        MAPS_ICON --> PERF
+    end
+    
+    subgraph USER["USER SPACE"]
+        PM["⚙️ Plugin Manager<br/>- Compiles eBPF C code<br/>- Loads eBPF programs<br/>- Lifecycle mgmt"]
+        
+        subgraph HUBBLE["HUBBLE CONTROL PLANE"]
+            EXT_CH["📨 External Channel<br/>(flow objects)"]
+            FLOWS["📦 flow objects<br/>(Cilium proto)"]
+            MA["🖥️ Monitor Agent<br/>- Listeners/Consumers<br/>- Event forwarding"]
+            HO["🔭 Hubble Observer<br/>- Parsers (L4/DNS/Drop)<br/>- K8s enrichment<br/>(Cilium libraries)"]
+            
+            subgraph OUTPUT["Output Endpoints"]
+                PROM["📈 :9965<br/>Prometheus<br/>(hubble_*)"]
+                RELAY["🔗 :4244<br/>Hubble Relay<br/>(flow logs)"]
+                SOCK["🔌 unix:///<br/>var/run/cilium/<br/>hubble.sock"]
+            end
+            
+            EXT_CH --> FLOWS
+            FLOWS -->|forwards| MA
+            MA --> HO
+            MA -->|register consumer| HO
+            HO --> PROM
+            HO --> RELAY
+            HO --> SOCK
+        end
+        
+        subgraph PLUGINS["Plugins (Go code)"]
+            P1["🔌 packetparser<br/>(manages tc programs)"]
+            P2["🔌 dns<br/>(Inspektor Gadget)"]
+            P3["🔌 dropreason<br/>(manages kprobes)"]
+            P4["🔌 linuxutil<br/>(netstats/ethtool)"]
+            P5["🔌 tcpretrans<br/>(manages kprobes)"]
+            P6["🔌 conntrack<br/>(manages kprobes)"]
+            P7["🔌 hnsstats<br/>(Windows API)"]
+        end
+        
+        P1 --> EXT_CH
+        P2 --> EXT_CH
+        P3 --> EXT_CH
+        P4 --> EXT_CH
+        P5 --> EXT_CH
+        P6 --> EXT_CH
+        P7 --> EXT_CH
+        
+        subgraph EBPF_COMP["eBPF Compilation"]
+            COMPILE["🔨 clang compile<br/>bpf2go"]
+        end
+        
+        PERF -->|read events| PM
+        PM --> P1
+        PM --> P2
+        PM --> P3
+        PM --> P4
+        PM --> P5
+        PM --> P6
+        PM --> P7
+        
+        PM -.->|compiles & loads| COMPILE
+        COMPILE -.->|deploys to| TC_ING
+        COMPILE -.->|deploys to| TC_EG
+        COMPILE -.->|deploys to| KPROBE_DROP
+        COMPILE -.->|deploys to| KPROBE_TCP
+        COMPILE -.->|deploys to| KPROBE_CT
+    end
+    
+    subgraph HUBBLE_TOOLS["HUBBLE TOOLS"]
+        CLI["💻 Hubble CLI<br/>Real-time flows"]
+        UI["🖼️ Hubble UI<br/>Service map"]
+    end
+    
+    subgraph EXTERNAL["EXTERNAL TOOLS"]
+        GRAFANA["📊 Grafana"]
+    end
+    
+    RELAY --> CLI
+    RELAY --> UI
+    PROM -->|visualize| GRAFANA
+    
+    style KERNEL fill:#ffcccc
+    style USER fill:#ccffcc
+    style HUBBLE fill:#ccccff
+    style OUTPUT fill:#ffffcc
+    style HOOKS fill:#ffe6cc
+    style MAPS fill:#e6ccff
+    style PLUGINS fill:#ccffff
+    style EBPF_COMP fill:#ffffcc
+    style HUBBLE_TOOLS fill:#e6ccff
+    style EXTERNAL fill:#ffe6cc
+    style FLOWS fill:#ffffcc
