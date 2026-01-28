@@ -82,6 +82,9 @@ func (m *Controller) Init(ctx context.Context) error {
 		// create cache instance
 		m.cache = cache.New(m.pubsub)
 
+		// set global cache for metrics module access
+		cache.GlobalCache = m.cache
+
 		// create enricher instance
 		m.enricher = enricher.New(ctx, m.cache)
 	}

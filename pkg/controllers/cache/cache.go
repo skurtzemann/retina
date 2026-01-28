@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var GlobalCache CacheInterface
+
 type Cache struct {
 	sync.RWMutex
 	l *log.ZapLogger
@@ -104,6 +106,52 @@ func (c *Cache) GetNodeByIP(ip string) *common.RetinaNode {
 	default:
 		return nil
 	}
+}
+
+// GetNodeByName returns the retina node for the given node name.
+func (c *Cache) GetNodeByName(nodeName string) *common.RetinaNode {
+	c.RLock()
+	defer c.RUnlock()
+
+	node, ok := c.nodeMap[nodeName]
+	if !ok {
+		c.l.Debug("node not found for name", zap.String("node", nodeName))
+		return nil
+	}
+	return node
+}
+
+// GetZoneByPodIP returns the availability zone for a pod IP.
+func (c *Cache) GetZoneByPodIP(ip string) string {
+	ep := c.GetPodByIP(ip)
+	if ep == nil {
+		c.l.Info("Pod not found for IP, using fallback zone",
+			zap.String("ip", ip))
+		return common.TopologyZoneLabelFallback
+	}
+
+	node := c.GetNodeByName(ep.NodeName())
+	if node == nil {
+		c.l.Info("Node not found for pod, using fallback zone",
+			zap.String("pod", ep.Key()),
+			zap.String("node_name", ep.NodeName()))
+		return common.TopologyZoneLabelFallback
+	}
+
+	zone := node.Zone()
+	if zone == "" {
+		c.l.Info("Node has empty zone, using fallback",
+			zap.String("node", node.Name()))
+		return common.TopologyZoneLabelFallback
+	}
+
+	c.l.Info("Zone found for pod IP",
+		zap.String("ip", ip),
+		zap.String("pod", ep.Key()),
+		zap.String("node", node.Name()),
+		zap.String("zone", zone))
+
+	return zone
 }
 
 // getObjByIPType returns the retina endpoint for the given IP.
