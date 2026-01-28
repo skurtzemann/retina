@@ -240,6 +240,7 @@ func (d *Daemon) Start() error {
 	if daemonConfig.EnablePodLevel {
 		pubSub := pubsub.New()
 		controllerCache := controllercache.New(pubSub)
+		controllerCache.SetConfig(daemonConfig)
 		enrich := enricher.New(ctx, controllerCache)
 		//nolint:govet // shadowing this err is fine
 		fm, err := filtermanager.Init(5) //nolint:gomnd // defaults
