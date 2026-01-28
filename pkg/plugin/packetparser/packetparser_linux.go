@@ -609,10 +609,8 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 			// Add the traffic direction to the flow.
 			fl.TrafficDirection = flow.TrafficDirection(bpfEvent.TrafficDirection)
 
-			// - Display flow information into the log if a specific
-			//   option 'EnableFlowDebugLog' is enabled.
-			// - Include Kubernetes pods and namespace informations
-			//   using the RetinaEndpoint cache
+			// Display flow information into the log if 'EnableFlowDebugLog' is enabled.
+			// Includes pod info (pod:ns/pod), node info (node:nodeName), or 'external' for unknown IPs.
 			if p.cfg.EnableFlowDebugLog {
 				var proto string
 				switch fl.L4.GetProtocol().(type) {
@@ -624,15 +622,18 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 					proto = "UNKNOWN"
 				}
 
-				srcPod := "<unknown>"
-				dstPod := "<unknown>"
-
+				srcPod := "external"
 				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Source); ep != nil {
-					srcPod = ep.Namespace() + "/" + ep.Name()
+					srcPod = "pod:" + ep.Namespace() + "/" + ep.Name()
+				} else if node := cache.GlobalCache.GetNodeByIP(fl.IP.Source); node != nil {
+					srcPod = "node:" + node.Name()
 				}
 
+				dstPod := "external"
 				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Destination); ep != nil {
-					dstPod = ep.Namespace() + "/" + ep.Name()
+					dstPod = "pod:" + ep.Namespace() + "/" + ep.Name()
+				} else if node := cache.GlobalCache.GetNodeByIP(fl.IP.Destination); node != nil {
+					dstPod = "node:" + node.Name()
 				}
 
 				p.l.Info("flow",
