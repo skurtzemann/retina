@@ -125,14 +125,14 @@ func (c *Cache) GetNodeByName(nodeName string) *common.RetinaNode {
 func (c *Cache) GetZoneByPodIP(ip string) string {
 	ep := c.GetPodByIP(ip)
 	if ep == nil {
-		c.l.Info("Pod not found for IP, using fallback zone",
+		c.l.Debug("Pod not found for IP, using fallback zone",
 			zap.String("ip", ip))
 		return common.TopologyZoneLabelFallback
 	}
 
 	node := c.GetNodeByName(ep.NodeName())
 	if node == nil {
-		c.l.Info("Node not found for pod, using fallback zone",
+		c.l.Debug("Node not found for pod, using fallback zone",
 			zap.String("pod", ep.Key()),
 			zap.String("node_name", ep.NodeName()))
 		return common.TopologyZoneLabelFallback
@@ -140,12 +140,12 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 
 	zone := node.Zone()
 	if zone == "" {
-		c.l.Info("Node has empty zone, using fallback",
+		c.l.Debug("Node has empty zone, using fallback",
 			zap.String("node", node.Name()))
 		return common.TopologyZoneLabelFallback
 	}
 
-	c.l.Info("Zone found for pod IP",
+	c.l.Debug("Zone found for pod IP",
 		zap.String("ip", ip),
 		zap.String("pod", ep.Key()),
 		zap.String("node", node.Name()),
