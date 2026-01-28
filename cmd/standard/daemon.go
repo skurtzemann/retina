@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -276,6 +277,22 @@ func (d *Daemon) Start() error {
 		svcController := sc.New(mgr.GetClient(), controllerCache)
 		if err := svcController.SetupWithManager(mgr); err != nil {
 			mainLogger.Fatal("unable to create svcController", zap.Error(err))
+		}
+
+		// Start periodic cache statistics logging if enabled
+		if daemonConfig.EnableCacheDebugLog {
+			go func() {
+				ticker := time.NewTicker(1 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						controllerCache.LogStatistics()
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
 		}
 
 		if daemonConfig.EnableAnnotations {

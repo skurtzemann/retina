@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/microsoft/retina/pkg/common"
+	kcfg "github.com/microsoft/retina/pkg/config"
 	"github.com/microsoft/retina/pkg/log"
 	"github.com/microsoft/retina/pkg/pubsub"
 	"go.uber.org/zap"
@@ -18,7 +19,8 @@ var GlobalCache CacheInterface
 
 type Cache struct {
 	sync.RWMutex
-	l *log.ZapLogger
+	l   *log.ZapLogger
+	cfg *kcfg.Config
 	// endpointMap is a map of pod key (namespace/name) to RetinaEndpoint
 	epMap map[string]*common.RetinaEndpoint
 
@@ -98,6 +100,13 @@ func (c *Cache) GetSvcByIP(ip string) *common.RetinaSvc {
 func (c *Cache) GetNodeByIP(ip string) *common.RetinaNode {
 	c.RLock()
 	defer c.RUnlock()
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("Looking up node by IP",
+			zap.String("ip", ip),
+			zap.Int("num_cached_nodes", len(c.ipToNodeName)),
+		)
+	}
 
 	obj := c.getObjByIPType(ip, TypeNode)
 	switch obj := obj.(type) {
@@ -255,6 +264,15 @@ func (c *Cache) updateEndpoint(ep *common.RetinaEndpoint) error {
 		c.l.Error("updateEndpoint: error getting IPs for pod", zap.String("pod", ep.Key()), zap.Error(err))
 		return err
 	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("Storing pod in cache",
+			zap.String("pod", ep.Key()),
+			zap.Strings("ips", ips),
+			zap.String("node", ep.NodeName()),
+		)
+	}
+
 	// delete if any existing object is using any IP
 	// send a delete event for the existing object
 	for _, ip := range ips {
@@ -329,6 +347,14 @@ func (c *Cache) UpdateRetinaNode(node *common.RetinaNode) error {
 // updateNode updates the cache with the given retina node.
 func (c *Cache) updateNode(node *common.RetinaNode) error {
 	ip := node.IPString()
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("Storing node in cache",
+			zap.String("node", node.Name()),
+			zap.String("ip", ip),
+			zap.String("zone", node.Zone()),
+		)
+	}
 
 	// delete if any existing object is using this IP
 	// send a delete event for the existing object
@@ -540,4 +566,23 @@ func (c *Cache) GetAnnotatedNamespaces() []string {
 	}
 	sort.Strings(ns)
 	return ns
+}
+
+func (c *Cache) SetConfig(cfg *kcfg.Config) {
+	c.Lock()
+	defer c.Unlock()
+	c.cfg = cfg
+}
+
+func (c *Cache) LogStatistics() {
+	c.RLock()
+	defer c.RUnlock()
+	c.l.Info("Cache statistics",
+		zap.Int("num_nodes", len(c.nodeMap)),
+		zap.Int("num_pods", len(c.epMap)),
+		zap.Int("num_services", len(c.svcMap)),
+		zap.Int("num_ip_to_node", len(c.ipToNodeName)),
+		zap.Int("num_ip_to_pod", len(c.ipToEpKey)),
+		zap.Int("num_ip_to_service", len(c.ipToSvcKey)),
+	)
 }
