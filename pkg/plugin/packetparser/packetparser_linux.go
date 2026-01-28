@@ -608,6 +608,28 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 			// Add the traffic direction to the flow.
 			fl.TrafficDirection = flow.TrafficDirection(bpfEvent.TrafficDirection)
 
+			if p.cfg.EnableFlowDebugLog {
+				var proto string
+				switch fl.L4.GetProtocol().(type) {
+				case *flow.Layer4_TCP:
+					proto = "TCP"
+				case *flow.Layer4_UDP:
+					proto = "UDP"
+				default:
+					proto = "UNKNOWN"
+				}
+				p.l.Info("flow",
+					zap.String("src_ip", fl.IP.Source),
+					zap.String("src_port", fmt.Sprintf("%d", fl.L4.GetTCP().GetSourcePort())),
+					zap.String("dst_ip", fl.IP.Destination),
+					zap.String("dst_port", fmt.Sprintf("%d", fl.L4.GetTCP().GetDestinationPort())),
+					zap.String("proto", proto),
+					zap.String("dir", fl.TrafficDirection.String()),
+					zap.String("verdict", fl.Verdict.String()),
+					zap.Bool("is_reply", fl.GetIsReply().Value),
+				)
+			}
+
 			meta := &utils.RetinaMetadata{}
 
 			// Add packet size to the flow's metadata.
