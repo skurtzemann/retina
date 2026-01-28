@@ -163,7 +163,7 @@ retina-capture-workload: ## build the Retina capture workload
 ##@ Containers
 
 IMAGE_REGISTRY	?= ghcr.io
-IMAGE_NAMESPACE ?= $(shell git config --get remote.origin.url | sed -E 's/.*github\.com[\/:]([^\/]+)\/([^\/.]+)(.git)?/\1\/\2/' | tr '[:upper:]' '[:lower:]')
+IMAGE_NAMESPACE ?= skurtzemann/retina-packetparser-az
 
 RETINA_BUILDER_IMAGE			= $(IMAGE_NAMESPACE)/retina-builder
 RETINA_TOOLS_IMAGE				= $(IMAGE_NAMESPACE)/retina-tools
@@ -224,6 +224,7 @@ container-docker: buildx # util target to build container images using docker bu
 	echo "Building $$image_name for $$os/$$arch "; \
 	mkdir -p $(ARTIFACTS_DIR); \
 	docker buildx build \
+		--load \
 		--platform $(PLATFORM) \
 		--metadata-file=$$image_metadata_filename \
 		-f $(DOCKERFILE) \
