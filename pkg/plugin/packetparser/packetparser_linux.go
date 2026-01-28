@@ -27,6 +27,7 @@ import (
 	"github.com/microsoft/retina/internal/ktime"
 	"github.com/microsoft/retina/pkg/common"
 	kcfg "github.com/microsoft/retina/pkg/config"
+	cache "github.com/microsoft/retina/pkg/controllers/cache"
 	"github.com/microsoft/retina/pkg/enricher"
 	"github.com/microsoft/retina/pkg/loader"
 	"github.com/microsoft/retina/pkg/log"
@@ -608,6 +609,10 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 			// Add the traffic direction to the flow.
 			fl.TrafficDirection = flow.TrafficDirection(bpfEvent.TrafficDirection)
 
+			// - Display flow information into the log if a specific
+			//   option 'EnableFlowDebugLog' is enabled.
+			// - Include Kubernetes pods and namespace informations
+			//   using the RetinaEndpoint cache
 			if p.cfg.EnableFlowDebugLog {
 				var proto string
 				switch fl.L4.GetProtocol().(type) {
@@ -618,6 +623,18 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 				default:
 					proto = "UNKNOWN"
 				}
+
+				srcPod := "<unknown>"
+				dstPod := "<unknown>"
+
+				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Source); ep != nil {
+					srcPod = ep.Namespace() + "/" + ep.Name()
+				}
+
+				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Destination); ep != nil {
+					dstPod = ep.Namespace() + "/" + ep.Name()
+				}
+
 				p.l.Info("flow",
 					zap.String("src_ip", fl.IP.Source),
 					zap.String("src_port", fmt.Sprintf("%d", fl.L4.GetTCP().GetSourcePort())),
@@ -627,6 +644,8 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 					zap.String("dir", fl.TrafficDirection.String()),
 					zap.String("verdict", fl.Verdict.String()),
 					zap.Bool("is_reply", fl.GetIsReply().Value),
+					zap.String("src_pod", srcPod),
+					zap.String("dst_pod", dstPod),
 				)
 			}
 
