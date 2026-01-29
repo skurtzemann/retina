@@ -38,6 +38,10 @@ func New(logger *log.ZapLogger) *Server {
 	}
 }
 
+func (rt *Server) AddHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	rt.mux.HandleFunc(path, handler)
+}
+
 func (rt *Server) SetupHandlers() {
 	rt.l.Info("Setting up handlers")
 	rt.servePrometheusMetrics()

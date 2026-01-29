@@ -71,10 +71,6 @@ func NewControllerManager(conf *kcfg.Config, kubeclient kubernetes.Interface, te
 func (m *Controller) Init(ctx context.Context, controllerCache *cache.Cache) error {
 	m.l.Info("Initializing controller manager ...")
 
-	if err := m.httpServer.Init(); err != nil {
-		return err
-	}
-
 	if m.conf.EnablePodLevel {
 		// create pubsub instance
 		m.pubsub = pubsub.New()
@@ -89,6 +85,13 @@ func (m *Controller) Init(ctx context.Context, controllerCache *cache.Cache) err
 
 		// create enricher instance (m.cache is guaranteed non-nil here)
 		m.enricher = enricher.New(ctx, m.cache)
+	}
+
+	// Always wire cache to HTTP server (even if nil, handle gracefully)
+	m.httpServer.SetCache(m.cache)
+
+	if err := m.httpServer.Init(); err != nil {
+		return err
 	}
 
 	return nil
