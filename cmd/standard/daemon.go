@@ -239,7 +239,7 @@ func (d *Daemon) Start() error {
 
 	if daemonConfig.EnablePodLevel {
 		pubSub := pubsub.New()
-		controllerCache := controllercache.New(pubSub, "controllerCache")
+		controllerCache := controllercache.New(pubSub, "agent-cache")
 		controllerCache.SetConfig(daemonConfig)
 		enrich := enricher.New(ctx, controllerCache)
 		//nolint:govet // shadowing this err is fine
@@ -316,7 +316,7 @@ func (d *Daemon) Start() error {
 	if err != nil {
 		mainLogger.Fatal("Failed to create controller manager", zap.Error(err))
 	}
-	if err := controllerMgr.Init(ctx); err != nil {
+	if err := controllerMgr.Init(ctx, nil); err != nil {
 		mainLogger.Fatal("Failed to initialize controller manager", zap.Error(err))
 	}
 	// Stop is best effort. If it fails, we still want to stop the main process.

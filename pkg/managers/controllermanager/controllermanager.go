@@ -68,7 +68,7 @@ func NewControllerManager(conf *kcfg.Config, kubeclient kubernetes.Interface, te
 	}, nil
 }
 
-func (m *Controller) Init(ctx context.Context) error {
+func (m *Controller) Init(ctx context.Context, controllerCache *cache.Cache) error {
 	m.l.Info("Initializing controller manager ...")
 
 	if err := m.httpServer.Init(); err != nil {
@@ -79,14 +79,15 @@ func (m *Controller) Init(ctx context.Context) error {
 		// create pubsub instance
 		m.pubsub = pubsub.New()
 
-		// create cache instance
-		m.cache = cache.New(m.pubsub, "GlobalCache")
-		m.cache.SetConfig(m.conf)
-
-		// set global cache for metrics module access
+		// use the passed cache instance, or create fallback if nil
+		if controllerCache != nil {
+			m.cache = controllerCache
+		} else {
+			m.cache = cache.New(m.pubsub, "controller-manager-embedded-cache")
+		}
 		cache.GlobalCache = m.cache
 
-		// create enricher instance
+		// create enricher instance (m.cache is guaranteed non-nil here)
 		m.enricher = enricher.New(ctx, m.cache)
 	}
 
