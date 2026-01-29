@@ -5,6 +5,7 @@ package pod
 
 import (
 	"context"
+	"time"
 
 	"github.com/microsoft/retina/pkg/common/apiretry"
 	"github.com/microsoft/retina/pkg/log"
@@ -76,6 +77,11 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	retinaEndpointCommon := retinaCommon.RetinaEndpointCommonFromPod(pod)
+	if retinaEndpointCommon.NodeName() == "" {
+		r.l.Debug("Pod has no node name, re-queuing",
+			zap.String("pod", req.NamespacedName.String()))
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 	if err := r.cache.UpdateRetinaEndpoint(retinaEndpointCommon); err != nil {
 		r.l.Error("Failed to update RetinaEndpoint in Cache", zap.Error(err), zap.String("Pod", req.NamespacedName.String()))
 		return ctrl.Result{}, err

@@ -73,6 +73,11 @@ func (r *RetinaEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	retinaEndpointCommon := retinaCommon.RetinaEndpointCommonFromAPI(retinaEndpoint)
+	if retinaEndpointCommon.NodeName() == "" {
+		r.l.Debug("RetinaEndpoint has no node name, re-queuing",
+			zap.String("endpoint", req.NamespacedName.String()))
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 	if err := r.cache.UpdateRetinaEndpoint(retinaEndpointCommon); err != nil {
 		r.l.Error("Failed to update RetinaEndpoint in Cache", zap.Error(err), zap.String("RetinaEndpoint", req.NamespacedName.String()))
 		return ctrl.Result{}, err
