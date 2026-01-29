@@ -91,7 +91,7 @@ func TestEnricher(t *testing.T) {
 	_, err := log.SetupZapLogger(opts)
 	require.NoError(t, err)
 
-	c := cache.New(pubsub.New())
+	c := cache.New(pubsub.New(), "test-cache")
 
 	err = c.UpdateRetinaEndpoint(sourcePod)
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestEnricherSecondaryIPs(t *testing.T) {
 	l := log.Logger().Named("test-enricher")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	c := cache.New(pubsub.New())
+	c := cache.New(pubsub.New(), "test-cache")
 
 	err := c.UpdateRetinaEndpoint(sourcePod)
 	require.NoError(t, err)

@@ -19,8 +19,9 @@ var GlobalCache CacheInterface
 
 type Cache struct {
 	sync.RWMutex
-	l   *log.ZapLogger
-	cfg *kcfg.Config
+	l    *log.ZapLogger
+	name string
+	cfg  *kcfg.Config
 	// endpointMap is a map of pod key (namespace/name) to RetinaEndpoint
 	epMap map[string]*common.RetinaEndpoint
 
@@ -49,9 +50,10 @@ type Cache struct {
 }
 
 // NewCache returns a new instance of Cache.
-func New(p pubsub.PubSubInterface) *Cache {
+func New(p pubsub.PubSubInterface, name string) *Cache {
 	c := &Cache{
-		l:            log.Logger().Named(string("Cache")),
+		l:            log.Logger().Named("Cache").Named(name),
+		name:         name,
 		epMap:        make(map[string]*common.RetinaEndpoint),
 		svcMap:       make(map[string]*common.RetinaSvc),
 		ipToEpKey:    make(map[string]string),
@@ -101,13 +103,6 @@ func (c *Cache) GetNodeByIP(ip string) *common.RetinaNode {
 	c.RLock()
 	defer c.RUnlock()
 
-	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
-		c.l.Info("Looking up node by IP",
-			zap.String("ip", ip),
-			zap.Int("num_cached_nodes", len(c.ipToNodeName)),
-		)
-	}
-
 	obj := c.getObjByIPType(ip, TypeNode)
 	switch obj := obj.(type) {
 	case *common.RetinaNode:
@@ -135,6 +130,7 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	ep := c.GetPodByIP(ip)
 	if ep == nil {
 		c.l.Debug("Pod not found for IP, using fallback zone",
+			zap.String("cache", c.name),
 			zap.String("ip", ip))
 		return common.TopologyZoneLabelFallback
 	}
@@ -142,6 +138,7 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	node := c.GetNodeByName(ep.NodeName())
 	if node == nil {
 		c.l.Debug("Node not found for pod, using fallback zone",
+			zap.String("cache", c.name),
 			zap.String("pod", ep.Key()),
 			zap.String("node_name", ep.NodeName()))
 		return common.TopologyZoneLabelFallback
@@ -150,11 +147,13 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	zone := node.Zone()
 	if zone == "" {
 		c.l.Debug("Node has empty zone, using fallback",
+			zap.String("cache", c.name),
 			zap.String("node", node.Name()))
 		return common.TopologyZoneLabelFallback
 	}
 
 	c.l.Debug("Zone found for pod IP",
+		zap.String("cache", c.name),
 		zap.String("ip", ip),
 		zap.String("pod", ep.Key()),
 		zap.String("node", node.Name()),
@@ -267,6 +266,7 @@ func (c *Cache) updateEndpoint(ep *common.RetinaEndpoint) error {
 
 	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
 		c.l.Info("Storing pod in cache",
+			zap.String("cache", c.name),
 			zap.String("pod", ep.Key()),
 			zap.Strings("ips", ips),
 			zap.String("node", ep.NodeName()),
@@ -350,6 +350,7 @@ func (c *Cache) updateNode(node *common.RetinaNode) error {
 
 	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
 		c.l.Info("Storing node in cache",
+			zap.String("cache", c.name),
 			zap.String("node", node.Name()),
 			zap.String("ip", ip),
 			zap.String("zone", node.Zone()),
@@ -578,6 +579,7 @@ func (c *Cache) LogStatistics() {
 	c.RLock()
 	defer c.RUnlock()
 	c.l.Info("Cache statistics",
+		zap.String("cache", c.name),
 		zap.Int("num_nodes", len(c.nodeMap)),
 		zap.Int("num_pods", len(c.epMap)),
 		zap.Int("num_services", len(c.svcMap)),

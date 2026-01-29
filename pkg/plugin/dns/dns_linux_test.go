@@ -53,7 +53,7 @@ func TestStart(t *testing.T) {
 
 	log.SetupZapLogger(log.GetDefaultLogOpts())
 
-	c := cache.New(pubsub.New())
+	c := cache.New(pubsub.New(), "test-cache")
 	e := enricher.New(ctxTimeout, c)
 	e.Run()
 	defer e.Reader.Close()

@@ -80,7 +80,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	pubSub := pubsub.New()
-	controllerCache := controllercache.New(pubSub)
+	controllerCache := controllercache.New(pubSub, "test-cache")
 	retinaEndpointReconciler = New(k8sManager.GetClient(), controllerCache)
 
 	err = retinaEndpointReconciler.SetupWithManager(k8sManager)

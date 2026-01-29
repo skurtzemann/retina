@@ -80,7 +80,7 @@ func (m *Controller) Init(ctx context.Context) error {
 		m.pubsub = pubsub.New()
 
 		// create cache instance
-		m.cache = cache.New(m.pubsub)
+		m.cache = cache.New(m.pubsub, "GlobalCache")
 		m.cache.SetConfig(m.conf)
 
 		// set global cache for metrics module access
