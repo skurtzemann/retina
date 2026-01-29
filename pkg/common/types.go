@@ -48,6 +48,11 @@ func (ep *RetinaEndpoint) NodeName() string {
 	return ep.nodeName
 }
 
+// SetNodeName sets the node name for this endpoint.
+func (ep *RetinaEndpoint) SetNodeName(name string) {
+	ep.nodeName = name
+}
+
 func isIPV4(ipAddress string) bool {
 	parsedIP := net.ParseIP(ipAddress)
 	return parsedIP.To4() != nil
