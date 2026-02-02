@@ -674,13 +674,13 @@ func (c *Cache) GetGetZoneByPodIPCallCount() int64 {
 }
 
 type CacheStats struct {
-	Cache           string
-	NumNodes        int
-	NumPods         int
-	NumServices     int
-	NumIPToNode     int
-	NumIPToPod      int
-	NumIPToServices int
+	Cache           string `json:"cache"`
+	NumNodes        int    `json:"num_nodes"`
+	NumPods         int    `json:"num_pods"`
+	NumServices     int    `json:"num_services"`
+	NumIPToNode     int    `json:"num_ip_to_node"`
+	NumIPToPod      int    `json:"num_ip_to_pod"`
+	NumIPToServices int    `json:"num_ip_to_services"`
 }
 
 func (c *Cache) GetStats() CacheStats {
