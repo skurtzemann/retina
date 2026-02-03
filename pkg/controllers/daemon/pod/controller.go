@@ -82,6 +82,12 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			zap.String("pod", req.NamespacedName.String()))
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
+	if r.cache.GetNodeByName(retinaEndpointCommon.NodeName()) == nil {
+		r.l.Debug("Node not yet in cache, requeuing pod",
+			zap.String("pod", req.NamespacedName.String()),
+			zap.String("node", retinaEndpointCommon.NodeName()))
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 	if err := r.cache.UpdateRetinaEndpoint(retinaEndpointCommon); err != nil {
 		r.l.Error("Failed to update RetinaEndpoint in Cache", zap.Error(err), zap.String("Pod", req.NamespacedName.String()))
 		return ctrl.Result{}, err
