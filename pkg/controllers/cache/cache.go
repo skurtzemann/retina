@@ -163,7 +163,7 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 
 	// Else debug logging enabled
 	ep := c.GetPodByIP(ip)
-	c.l.Info("GetZoneByPodIP",
+	c.l.Debug("GetZoneByPodIP",
 		zap.String("cache", c.name),
 		zap.String("ip", ip),
 		zap.String("pod", func() string {
@@ -181,14 +181,14 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	)
 
 	if ep == nil {
-		c.l.Info("Pod not found for IP, using fallback zone",
+		c.l.Debug("Pod not found for IP, using fallback zone",
 			zap.String("cache", c.name),
 			zap.String("ip", ip))
 		return common.TopologyZoneLabelFallback
 	}
 
 	node := c.GetNodeByName(ep.NodeName())
-	c.l.Info("GetNodeByName",
+	c.l.Debug("GetNodeByName",
 		zap.String("cache", c.name),
 		zap.String("node_name", ep.NodeName()),
 		zap.String("node", func() string {
@@ -200,7 +200,7 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	)
 
 	if node == nil {
-		c.l.Info("Node not found for pod, using fallback zone",
+		c.l.Debug("Node not found for pod, using fallback zone",
 			zap.String("cache", c.name),
 			zap.String("pod", ep.Key()),
 			zap.String("node_name", ep.NodeName()))
@@ -208,20 +208,20 @@ func (c *Cache) GetZoneByPodIP(ip string) string {
 	}
 
 	zone := node.Zone()
-	c.l.Info("Node zone",
+	c.l.Debug("Node zone",
 		zap.String("cache", c.name),
 		zap.String("node", node.Name()),
 		zap.String("zone", zone),
 	)
 
 	if zone == "" {
-		c.l.Info("Node has empty zone, using fallback",
+		c.l.Debug("Node has empty zone, using fallback",
 			zap.String("cache", c.name),
 			zap.String("node", node.Name()))
 		return common.TopologyZoneLabelFallback
 	}
 
-	c.l.Info("Zone found for pod IP",
+	c.l.Debug("Zone found for pod IP",
 		zap.String("cache", c.name),
 		zap.String("ip", ip),
 		zap.String("pod", ep.Key()),
