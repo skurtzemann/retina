@@ -683,6 +683,19 @@ type CacheStats struct {
 	NumIPToServices int    `json:"num_ip_to_services"`
 }
 
+type NodeSample struct {
+	Name string `json:"name"`
+	Zone string `json:"zone"`
+	IP   string `json:"ip"`
+}
+
+type EndpointSample struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	IP        string `json:"ip"`
+	NodeName  string `json:"node_name"`
+}
+
 func (c *Cache) GetStats() CacheStats {
 	c.RLock()
 	defer c.RUnlock()
@@ -695,4 +708,46 @@ func (c *Cache) GetStats() CacheStats {
 		NumIPToPod:      len(c.ipToEpKey),
 		NumIPToServices: len(c.ipToSvcKey),
 	}
+}
+
+func (c *Cache) GetSampleNodes(maxEntries int) []NodeSample {
+	c.RLock()
+	defer c.RUnlock()
+
+	samples := make([]NodeSample, 0, maxEntries)
+	i := 0
+	for name, node := range c.nodeMap {
+		if i >= maxEntries {
+			break
+		}
+		samples = append(samples, NodeSample{
+			Name: name,
+			Zone: node.Zone(),
+			IP:   node.IPString(),
+		})
+		i++
+	}
+	return samples
+}
+
+func (c *Cache) GetSampleEndpoints(maxEntries int) []EndpointSample {
+	c.RLock()
+	defer c.RUnlock()
+
+	samples := make([]EndpointSample, 0, maxEntries)
+	i := 0
+	for _, ep := range c.epMap {
+		if i >= maxEntries {
+			break
+		}
+		ip, _ := ep.PrimaryIP()
+		samples = append(samples, EndpointSample{
+			Namespace: ep.Namespace(),
+			Name:      ep.Name(),
+			IP:        ip,
+			NodeName:  ep.NodeName(),
+		})
+		i++
+	}
+	return samples
 }

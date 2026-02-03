@@ -54,6 +54,10 @@ func (s *HTTPServer) handleCacheDebug(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"cache_stats":              stats,
 		"get_zone_by_pod_ip_calls": callCount,
+		"entries": map[string]interface{}{
+			"nodes":     s.cache.GetSampleNodes(10),
+			"endpoints": s.cache.GetSampleEndpoints(10),
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
