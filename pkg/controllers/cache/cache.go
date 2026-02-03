@@ -334,11 +334,17 @@ func (c *Cache) updateEndpoint(ep *common.RetinaEndpoint) error {
 	}
 
 	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
-		c.l.Info("Storing pod in cache",
+		operation := "add"
+		if _, exists := c.epMap[ep.Key()]; exists {
+			operation = "update"
+		}
+		c.l.Info("cache",
 			zap.String("cache", c.name),
-			zap.String("pod", ep.Key()),
+			zap.String("operation", operation),
+			zap.String("type", "endpoint"),
+			zap.String("endpoint", ep.Key()),
 			zap.Strings("ips", ips),
-			zap.String("node", ep.NodeName()),
+			zap.String("node_name", ep.NodeName()),
 		)
 	}
 
@@ -418,8 +424,14 @@ func (c *Cache) updateNode(node *common.RetinaNode) error {
 	ip := node.IPString()
 
 	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
-		c.l.Info("Storing node in cache",
+		operation := "add"
+		if _, exists := c.nodeMap[node.Name()]; exists {
+			operation = "update"
+		}
+		c.l.Info("cache",
 			zap.String("cache", c.name),
+			zap.String("operation", operation),
+			zap.String("type", "node"),
 			zap.String("node", node.Name()),
 			zap.String("ip", ip),
 			zap.String("zone", node.Zone()),
@@ -468,6 +480,16 @@ func (c *Cache) deleteEndpoint(epKey string) error {
 	if err != nil {
 		c.l.Error("error getting primary IP for pod", zap.String("pod", ep.Key()), zap.Error(err))
 		return err
+	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", "delete"),
+			zap.String("type", "endpoint"),
+			zap.String("endpoint", ep.Key()),
+			zap.Strings("ips", ips),
+		)
 	}
 
 	delete(c.epMap, epKey)
@@ -525,6 +547,17 @@ func (c *Cache) deleteNode(nodeName string) error {
 	if !ok {
 		c.l.Debug("node not found in cache", zap.String("node", nodeName))
 		return fmt.Errorf("node not found in cache: %s", nodeName)
+	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", "delete"),
+			zap.String("type", "node"),
+			zap.String("node", node.Name()),
+			zap.String("ip", node.IPString()),
+			zap.String("zone", node.Zone()),
+		)
 	}
 
 	delete(c.nodeMap, nodeName)
