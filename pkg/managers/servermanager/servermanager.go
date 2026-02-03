@@ -49,11 +49,9 @@ func (s *HTTPServer) handleCacheDebug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := s.cache.GetStats()
-	callCount := s.cache.GetGetZoneByPodIPCallCount()
 
 	response := map[string]interface{}{
-		"cache_stats":              stats,
-		"get_zone_by_pod_ip_calls": callCount,
+		"cache_stats": stats,
 		"entries": map[string]interface{}{
 			"nodes":     s.cache.GetSampleNodes(10),
 			"endpoints": s.cache.GetSampleEndpoints(10),

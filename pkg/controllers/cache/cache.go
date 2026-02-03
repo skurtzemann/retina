@@ -7,7 +7,6 @@ import (
 	"net"
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"github.com/microsoft/retina/pkg/common"
 	kcfg "github.com/microsoft/retina/pkg/config"
@@ -48,9 +47,6 @@ type Cache struct {
 	nsAnnotated map[string]bool
 
 	pubsub pubsub.PubSubInterface
-
-	// Debug metrics
-	getZoneByPodIPCallCount int64
 }
 
 // NewCache returns a new instance of Cache.
@@ -145,9 +141,6 @@ func (c *Cache) GetNodeByName(nodeName string) *common.RetinaNode {
 //
 // Debug logging (when EnableCacheDebugLog=true) traces each step.
 func (c *Cache) GetZoneByPodIP(ip string) string {
-	// Increment call counter for debug endpoint
-	atomic.AddInt64(&c.getZoneByPodIPCallCount, 1)
-
 	// Fast path: no logging overhead
 	if c.cfg == nil || !c.cfg.EnableCacheDebugLog {
 		ep := c.GetPodByIP(ip)
@@ -667,10 +660,6 @@ func (c *Cache) LogStatistics() {
 		zap.Int("num_ip_to_pod", len(c.ipToEpKey)),
 		zap.Int("num_ip_to_service", len(c.ipToSvcKey)),
 	)
-}
-
-func (c *Cache) GetGetZoneByPodIPCallCount() int64 {
-	return atomic.LoadInt64(&c.getZoneByPodIPCallCount)
 }
 
 type CacheStats struct {
