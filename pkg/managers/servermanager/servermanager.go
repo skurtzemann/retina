@@ -83,6 +83,7 @@ func (s *HTTPServer) handleCacheDebug(w http.ResponseWriter, r *http.Request) {
 			"nodes":     s.cache.GetSampleNodes(s.nodeSampleLimit),
 			"endpoints": s.cache.GetSampleEndpoints(s.endpointSampleLimit),
 		},
+		"validation": s.cache.Validate(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

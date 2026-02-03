@@ -718,6 +718,13 @@ type EndpointSample struct {
 	NodeName  string `json:"node_name"`
 }
 
+type CacheValidationResult struct {
+	Status              string `json:"status"`
+	PodMissingNodeCount int    `json:"pod_missing_node_count"`
+	OrphanIPToPodCount  int    `json:"orphan_ip_to_pod_count"`
+	OrphanIPToNodeCount int    `json:"orphan_ip_to_node_count"`
+}
+
 func (c *Cache) GetStats() CacheStats {
 	c.RLock()
 	defer c.RUnlock()
@@ -772,4 +779,37 @@ func (c *Cache) GetSampleEndpoints(maxEntries int) []EndpointSample {
 		i++
 	}
 	return samples
+}
+
+func (c *Cache) Validate() CacheValidationResult {
+	c.RLock()
+	defer c.RUnlock()
+
+	result := CacheValidationResult{
+		Status: "healthy",
+	}
+
+	for _, ep := range c.epMap {
+		nodeName := ep.NodeName()
+		if _, exists := c.nodeMap[nodeName]; !exists {
+			result.PodMissingNodeCount++
+			result.Status = "warning"
+		}
+	}
+
+	for _, podKey := range c.ipToEpKey {
+		if _, exists := c.epMap[podKey]; !exists {
+			result.OrphanIPToPodCount++
+			result.Status = "warning"
+		}
+	}
+
+	for _, nodeName := range c.ipToNodeName {
+		if _, exists := c.nodeMap[nodeName]; !exists {
+			result.OrphanIPToNodeCount++
+			result.Status = "warning"
+		}
+	}
+
+	return result
 }
