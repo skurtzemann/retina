@@ -108,6 +108,9 @@ type Module struct {
 
 	// pubsub subscription uuid
 	pubsubPodSub string
+
+	// zonePairMetrics for zone-to-zone traffic metrics
+	zonePairMetrics *ZonePairMetrics
 }
 
 func InitModule(ctx context.Context,
@@ -257,6 +260,10 @@ func (m *Module) updateMetricsContexts(spec *api.MetricsSpec) {
 			m.l.Error("Invalid metric name", zap.String("metricName", ctxOption.MetricName))
 		}
 	}
+
+	// Initialize zone-pair metrics (always enabled)
+	m.zonePairMetrics = NewZonePairMetrics(m.l)
+	m.registry["zone_pair"] = m.zonePairMetrics
 
 	for metricName, metricObj := range m.registry {
 		metricObj.Init(metricName)
