@@ -24,7 +24,7 @@ func TestNewCache(t *testing.T) {
 	defer ctrl.Finish()
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 }
 
@@ -35,7 +35,7 @@ func TestCacheEndpoints(t *testing.T) {
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Publish(common.PubSubPods, gomock.Any()).Times(2)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addEndpoints := common.NewRetinaEndpoint("pod1", "ns1", nil)
@@ -101,7 +101,7 @@ func TestCacheServices(t *testing.T) {
 	defer ctrl.Finish()
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addSvc := common.NewRetinaSvc("svc1", "ns1", nil, nil, nil)
@@ -145,7 +145,7 @@ func TestCacheNodes(t *testing.T) {
 	defer ctrl.Finish()
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addNode := common.NewRetinaNode("node1", net.IPv4(1, 2, 3, 4))
@@ -181,7 +181,7 @@ func TestAddPodSvcNodeSameIP(t *testing.T) {
 	p.EXPECT().Publish(common.PubSubSvc, gomock.Any()).Times(2)
 	p.EXPECT().Publish(common.PubSubNode, gomock.Any()).Times(1)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addEndpoints := common.NewRetinaEndpoint("pod1", "ns1", nil)
@@ -233,7 +233,7 @@ func TestAddPodSvcNodeSameIPDiffNS(t *testing.T) {
 	p.EXPECT().Publish(common.PubSubSvc, gomock.Any()).Times(2)
 	p.EXPECT().Publish(common.PubSubNode, gomock.Any()).Times(1)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addEndpoints := common.NewRetinaEndpoint("pod1", "ns1", nil)
@@ -284,7 +284,7 @@ func TestAddPodDiffNs(t *testing.T) {
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Publish(common.PubSubPods, gomock.Any()).Times(3)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addEndpoints := common.NewRetinaEndpoint("pod1", "ns1", nil)
@@ -327,7 +327,7 @@ func TestFailDelete(t *testing.T) {
 	defer ctrl.Finish()
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	assert.NotNil(t, c)
 
 	addEndpoints := common.NewRetinaEndpoint("pod1", "ns1", nil)
@@ -354,7 +354,7 @@ func TestCachingNamespace(t *testing.T) {
 	defer ctrl.Finish()
 	p := pubsub.NewMockPubSubInterface(ctrl)
 	p.EXPECT().Subscribe(common.PubSubAPIServer, gomock.Any()).Times(1)
-	c := New(p)
+	c := New(p, "test-cache")
 	ns := "test-ns"
 
 	c.AddAnnotatedNamespace(ns)

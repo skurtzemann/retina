@@ -73,6 +73,8 @@ type Config struct {
 	RemoteContext            bool          `yaml:"remoteContext"`
 	EnableAnnotations        bool          `yaml:"enableAnnotations"`
 	BypassLookupIPOfInterest bool          `yaml:"bypassLookupIPOfInterest"`
+	EnableFlowDebugLog       bool          `yaml:"enableFlowDebugLog"`
+	EnableCacheDebugLog      bool          `yaml:"enableCacheDebugLog"`
 	DataAggregationLevel     Level         `yaml:"dataAggregationLevel"`
 	MonitorSockPath          string        `yaml:"monitorSockPath"`
 	TelemetryInterval        time.Duration `yaml:"telemetryInterval"`

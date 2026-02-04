@@ -27,6 +27,7 @@ import (
 	"github.com/microsoft/retina/internal/ktime"
 	"github.com/microsoft/retina/pkg/common"
 	kcfg "github.com/microsoft/retina/pkg/config"
+	cache "github.com/microsoft/retina/pkg/controllers/cache"
 	"github.com/microsoft/retina/pkg/enricher"
 	"github.com/microsoft/retina/pkg/loader"
 	"github.com/microsoft/retina/pkg/log"
@@ -607,6 +608,47 @@ func (p *packetParser) processRecord(ctx context.Context, id int) {
 
 			// Add the traffic direction to the flow.
 			fl.TrafficDirection = flow.TrafficDirection(bpfEvent.TrafficDirection)
+
+			// Display flow information into the log if 'EnableFlowDebugLog' is enabled.
+			// Includes pod info (pod:ns/pod), node info (node:nodeName), or 'external' for unknown IPs.
+			if p.cfg.EnableFlowDebugLog {
+				var proto string
+				switch fl.L4.GetProtocol().(type) {
+				case *flow.Layer4_TCP:
+					proto = "TCP"
+				case *flow.Layer4_UDP:
+					proto = "UDP"
+				default:
+					proto = "UNKNOWN"
+				}
+
+				srcPod := "external"
+				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Source); ep != nil {
+					srcPod = "pod:" + ep.Namespace() + "/" + ep.Name()
+				} else if node := cache.GlobalCache.GetNodeByIP(fl.IP.Source); node != nil {
+					srcPod = "node:" + node.Name()
+				}
+
+				dstPod := "external"
+				if ep := cache.GlobalCache.GetPodByIP(fl.IP.Destination); ep != nil {
+					dstPod = "pod:" + ep.Namespace() + "/" + ep.Name()
+				} else if node := cache.GlobalCache.GetNodeByIP(fl.IP.Destination); node != nil {
+					dstPod = "node:" + node.Name()
+				}
+
+				p.l.Info("flow",
+					zap.String("src_ip", fl.IP.Source),
+					zap.String("src_port", fmt.Sprintf("%d", fl.L4.GetTCP().GetSourcePort())),
+					zap.String("dst_ip", fl.IP.Destination),
+					zap.String("dst_port", fmt.Sprintf("%d", fl.L4.GetTCP().GetDestinationPort())),
+					zap.String("proto", proto),
+					zap.String("dir", fl.TrafficDirection.String()),
+					zap.String("verdict", fl.Verdict.String()),
+					zap.Bool("is_reply", fl.GetIsReply().Value),
+					zap.String("src_pod", srcPod),
+					zap.String("dst_pod", dstPod),
+				)
+			}
 
 			meta := &utils.RetinaMetadata{}
 

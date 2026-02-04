@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -236,9 +237,12 @@ func (d *Daemon) Start() error {
 	ctx := ctrl.SetupSignalHandler()
 	ctrl.SetLogger(zapr.NewLogger(zl.Logger.Named("controller-runtime")))
 
+	var controllerCache *controllercache.Cache = nil
+
 	if daemonConfig.EnablePodLevel {
 		pubSub := pubsub.New()
-		controllerCache := controllercache.New(pubSub)
+		controllerCache = controllercache.New(pubSub, "agent-cache")
+		controllerCache.SetConfig(daemonConfig)
 		enrich := enricher.New(ctx, controllerCache)
 		//nolint:govet // shadowing this err is fine
 		fm, err := filtermanager.Init(5) //nolint:gomnd // defaults
@@ -278,6 +282,22 @@ func (d *Daemon) Start() error {
 			mainLogger.Fatal("unable to create svcController", zap.Error(err))
 		}
 
+		// Start periodic cache statistics logging if enabled
+		if daemonConfig.EnableCacheDebugLog {
+			go func() {
+				ticker := time.NewTicker(1 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						controllerCache.LogStatistics()
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+		}
+
 		if daemonConfig.EnableAnnotations {
 			mainLogger.Info("Initializing MetricsConfig namespaceController")
 			namespaceController := namespacecontroller.New(mgr.GetClient(), controllerCache, metricsModule)
@@ -298,7 +318,7 @@ func (d *Daemon) Start() error {
 	if err != nil {
 		mainLogger.Fatal("Failed to create controller manager", zap.Error(err))
 	}
-	if err := controllerMgr.Init(ctx); err != nil {
+	if err := controllerMgr.Init(ctx, controllerCache); err != nil {
 		mainLogger.Fatal("Failed to initialize controller manager", zap.Error(err))
 	}
 	// Stop is best effort. If it fails, we still want to stop the main process.

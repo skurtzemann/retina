@@ -9,14 +9,19 @@ import (
 	"sync"
 
 	"github.com/microsoft/retina/pkg/common"
+	kcfg "github.com/microsoft/retina/pkg/config"
 	"github.com/microsoft/retina/pkg/log"
 	"github.com/microsoft/retina/pkg/pubsub"
 	"go.uber.org/zap"
 )
 
+var GlobalCache CacheInterface
+
 type Cache struct {
 	sync.RWMutex
-	l *log.ZapLogger
+	l    *log.ZapLogger
+	name string
+	cfg  *kcfg.Config
 	// endpointMap is a map of pod key (namespace/name) to RetinaEndpoint
 	epMap map[string]*common.RetinaEndpoint
 
@@ -45,9 +50,10 @@ type Cache struct {
 }
 
 // NewCache returns a new instance of Cache.
-func New(p pubsub.PubSubInterface) *Cache {
+func New(p pubsub.PubSubInterface, name string) *Cache {
 	c := &Cache{
-		l:            log.Logger().Named(string("Cache")),
+		l:            log.Logger().Named("Cache").Named(name),
+		name:         name,
 		epMap:        make(map[string]*common.RetinaEndpoint),
 		svcMap:       make(map[string]*common.RetinaSvc),
 		ipToEpKey:    make(map[string]string),
@@ -104,6 +110,125 @@ func (c *Cache) GetNodeByIP(ip string) *common.RetinaNode {
 	default:
 		return nil
 	}
+}
+
+// GetNodeByName returns the retina node for the given node name.
+func (c *Cache) GetNodeByName(nodeName string) *common.RetinaNode {
+	c.RLock()
+	defer c.RUnlock()
+
+	node, ok := c.nodeMap[nodeName]
+	if !ok {
+		c.l.Debug("node not found for name", zap.String("node", nodeName))
+		return nil
+	}
+	return node
+}
+
+// GetZoneByPodIP returns the availability zone for a given pod IP.
+//
+// Zone Lookup Chain:
+//  1. Look up pod by IP in ipToEpKey map (GetPodByIP)
+//  2. Get pod's node name (ep.NodeName())
+//  3. Look up node by name in nodeMap (GetNodeByName)
+//  4. Extract zone from node.Zone()
+//
+// Returns TopologyZoneLabelFallback ("unknown") if:
+//   - Pod not found by IP
+//   - Pod has no node name assigned
+//   - Node not found by name in nodeMap
+//   - Node has empty zone field
+//
+// Debug logging (when EnableCacheDebugLog=true) traces each step.
+func (c *Cache) GetZoneByPodIP(ip string) string {
+	// Fast path: no logging overhead
+	if c.cfg == nil || !c.cfg.EnableCacheDebugLog {
+		ep := c.GetPodByIP(ip)
+		if ep == nil {
+			return common.TopologyZoneLabelFallback
+		}
+
+		node := c.GetNodeByName(ep.NodeName())
+		if node == nil {
+			return common.TopologyZoneLabelFallback
+		}
+
+		zone := node.Zone()
+		if zone == "" {
+			return common.TopologyZoneLabelFallback
+		}
+
+		return zone
+	}
+
+	// Else debug logging enabled
+	ep := c.GetPodByIP(ip)
+	c.l.Debug("GetZoneByPodIP",
+		zap.String("cache", c.name),
+		zap.String("ip", ip),
+		zap.String("pod", func() string {
+			if ep != nil {
+				return ep.Key()
+			}
+			return "nil"
+		}()),
+		zap.String("node_name", func() string {
+			if ep != nil {
+				return ep.NodeName()
+			}
+			return "nil"
+		}()),
+	)
+
+	if ep == nil {
+		c.l.Debug("Pod not found for IP, using fallback zone",
+			zap.String("cache", c.name),
+			zap.String("ip", ip))
+		return common.TopologyZoneLabelFallback
+	}
+
+	node := c.GetNodeByName(ep.NodeName())
+	c.l.Debug("GetNodeByName",
+		zap.String("cache", c.name),
+		zap.String("node_name", ep.NodeName()),
+		zap.String("node", func() string {
+			if node != nil {
+				return node.Name()
+			}
+			return "nil"
+		}()),
+	)
+
+	if node == nil {
+		c.l.Debug("Node not found for pod, using fallback zone",
+			zap.String("cache", c.name),
+			zap.String("pod", ep.Key()),
+			zap.String("node_name", ep.NodeName()))
+		return common.TopologyZoneLabelFallback
+	}
+
+	zone := node.Zone()
+	c.l.Debug("Node zone",
+		zap.String("cache", c.name),
+		zap.String("node", node.Name()),
+		zap.String("zone", zone),
+	)
+
+	if zone == "" {
+		c.l.Debug("Node has empty zone, using fallback",
+			zap.String("cache", c.name),
+			zap.String("node", node.Name()))
+		return common.TopologyZoneLabelFallback
+	}
+
+	c.l.Debug("Zone found for pod IP",
+		zap.String("cache", c.name),
+		zap.String("ip", ip),
+		zap.String("pod", ep.Key()),
+		zap.String("node", node.Name()),
+		zap.String("zone", zone))
+
+	return zone
 }
 
 // getObjByIPType returns the retina endpoint for the given IP.
@@ -207,6 +332,22 @@ func (c *Cache) updateEndpoint(ep *common.RetinaEndpoint) error {
 		c.l.Error("updateEndpoint: error getting IPs for pod", zap.String("pod", ep.Key()), zap.Error(err))
 		return err
 	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		operation := "add"
+		if _, exists := c.epMap[ep.Key()]; exists {
+			operation = "update"
+		}
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", operation),
+			zap.String("type", "endpoint"),
+			zap.String("endpoint", ep.Key()),
+			zap.Strings("ips", ips),
+			zap.String("node_name", ep.NodeName()),
+		)
+	}
+
 	// delete if any existing object is using any IP
 	// send a delete event for the existing object
 	for _, ip := range ips {
@@ -282,6 +423,21 @@ func (c *Cache) UpdateRetinaNode(node *common.RetinaNode) error {
 func (c *Cache) updateNode(node *common.RetinaNode) error {
 	ip := node.IPString()
 
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		operation := "add"
+		if _, exists := c.nodeMap[node.Name()]; exists {
+			operation = "update"
+		}
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", operation),
+			zap.String("type", "node"),
+			zap.String("node", node.Name()),
+			zap.String("ip", ip),
+			zap.String("zone", node.Zone()),
+		)
+	}
+
 	// delete if any existing object is using this IP
 	// send a delete event for the existing object
 	err := c.deleteByIP(ip, node.Name())
@@ -324,6 +480,16 @@ func (c *Cache) deleteEndpoint(epKey string) error {
 	if err != nil {
 		c.l.Error("error getting primary IP for pod", zap.String("pod", ep.Key()), zap.Error(err))
 		return err
+	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", "delete"),
+			zap.String("type", "endpoint"),
+			zap.String("endpoint", ep.Key()),
+			zap.Strings("ips", ips),
+		)
 	}
 
 	delete(c.epMap, epKey)
@@ -381,6 +547,17 @@ func (c *Cache) deleteNode(nodeName string) error {
 	if !ok {
 		c.l.Debug("node not found in cache", zap.String("node", nodeName))
 		return fmt.Errorf("node not found in cache: %s", nodeName)
+	}
+
+	if c.cfg != nil && c.cfg.EnableCacheDebugLog {
+		c.l.Info("cache",
+			zap.String("cache", c.name),
+			zap.String("operation", "delete"),
+			zap.String("type", "node"),
+			zap.String("node", node.Name()),
+			zap.String("ip", node.IPString()),
+			zap.String("zone", node.Zone()),
+		)
 	}
 
 	delete(c.nodeMap, nodeName)
@@ -492,4 +669,147 @@ func (c *Cache) GetAnnotatedNamespaces() []string {
 	}
 	sort.Strings(ns)
 	return ns
+}
+
+func (c *Cache) SetConfig(cfg *kcfg.Config) {
+	c.Lock()
+	defer c.Unlock()
+	c.cfg = cfg
+}
+
+func (c *Cache) GetName() string {
+	return c.name
+}
+
+func (c *Cache) LogStatistics() {
+	c.RLock()
+	defer c.RUnlock()
+	c.l.Info("Cache statistics",
+		zap.String("cache", c.name),
+		zap.Int("num_nodes", len(c.nodeMap)),
+		zap.Int("num_pods", len(c.epMap)),
+		zap.Int("num_services", len(c.svcMap)),
+		zap.Int("num_ip_to_node", len(c.ipToNodeName)),
+		zap.Int("num_ip_to_pod", len(c.ipToEpKey)),
+		zap.Int("num_ip_to_service", len(c.ipToSvcKey)),
+	)
+}
+
+type CacheStats struct {
+	Cache           string `json:"cache"`
+	NumNodes        int    `json:"num_nodes"`
+	NumPods         int    `json:"num_pods"`
+	NumServices     int    `json:"num_services"`
+	NumIPToNode     int    `json:"num_ip_to_node"`
+	NumIPToPod      int    `json:"num_ip_to_pod"`
+	NumIPToServices int    `json:"num_ip_to_services"`
+}
+
+type NodeSample struct {
+	Name string `json:"name"`
+	Zone string `json:"zone"`
+	IP   string `json:"ip"`
+}
+
+type EndpointSample struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	IP        string `json:"ip"`
+	NodeName  string `json:"node_name"`
+}
+
+type CacheValidationResult struct {
+	Status              string `json:"status"`
+	PodMissingNodeCount int    `json:"pod_missing_node_count"`
+	OrphanIPToPodCount  int    `json:"orphan_ip_to_pod_count"`
+	OrphanIPToNodeCount int    `json:"orphan_ip_to_node_count"`
+}
+
+func (c *Cache) GetStats() CacheStats {
+	c.RLock()
+	defer c.RUnlock()
+	return CacheStats{
+		Cache:           c.name,
+		NumNodes:        len(c.nodeMap),
+		NumPods:         len(c.epMap),
+		NumServices:     len(c.svcMap),
+		NumIPToNode:     len(c.ipToNodeName),
+		NumIPToPod:      len(c.ipToEpKey),
+		NumIPToServices: len(c.ipToSvcKey),
+	}
+}
+
+func (c *Cache) GetSampleNodes(maxEntries int) []NodeSample {
+	c.RLock()
+	defer c.RUnlock()
+
+	samples := make([]NodeSample, 0, maxEntries)
+	i := 0
+	for name, node := range c.nodeMap {
+		if i >= maxEntries {
+			break
+		}
+		samples = append(samples, NodeSample{
+			Name: name,
+			Zone: node.Zone(),
+			IP:   node.IPString(),
+		})
+		i++
+	}
+	return samples
+}
+
+func (c *Cache) GetSampleEndpoints(maxEntries int) []EndpointSample {
+	c.RLock()
+	defer c.RUnlock()
+
+	samples := make([]EndpointSample, 0, maxEntries)
+	i := 0
+	for _, ep := range c.epMap {
+		if i >= maxEntries {
+			break
+		}
+		ip, _ := ep.PrimaryIP()
+		samples = append(samples, EndpointSample{
+			Namespace: ep.Namespace(),
+			Name:      ep.Name(),
+			IP:        ip,
+			NodeName:  ep.NodeName(),
+		})
+		i++
+	}
+	return samples
+}
+
+func (c *Cache) Validate() CacheValidationResult {
+	c.RLock()
+	defer c.RUnlock()
+
+	result := CacheValidationResult{
+		Status: "healthy",
+	}
+
+	for _, ep := range c.epMap {
+		nodeName := ep.NodeName()
+		if _, exists := c.nodeMap[nodeName]; !exists {
+			result.PodMissingNodeCount++
+			result.Status = "warning"
+		}
+	}
+
+	for _, podKey := range c.ipToEpKey {
+		if _, exists := c.epMap[podKey]; !exists {
+			result.OrphanIPToPodCount++
+			result.Status = "warning"
+		}
+	}
+
+	for _, nodeName := range c.ipToNodeName {
+		if _, exists := c.nodeMap[nodeName]; !exists {
+			result.OrphanIPToNodeCount++
+			result.Status = "warning"
+		}
+	}
+
+	return result
 }

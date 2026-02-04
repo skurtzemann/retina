@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/cilium/api/v1/flow"
 	api "github.com/microsoft/retina/crd/api/v1alpha1"
 	"github.com/microsoft/retina/pkg/common"
+	"github.com/microsoft/retina/pkg/controllers/cache"
 	"github.com/microsoft/retina/pkg/utils"
 )
 
@@ -34,6 +35,9 @@ const (
 
 	// port context option
 	portCtxOption = "port"
+
+	// zone context option
+	zoneCtxOption = "zone"
 
 	// workloads context option
 	workloadKindCtxOption = "workload_kind"
@@ -95,6 +99,7 @@ type ContextOptions struct {
 	Workload  bool
 	Service   bool
 	Port      bool
+	Zone      bool
 }
 
 type DirtyCachePod struct {
@@ -129,6 +134,8 @@ func NewCtxOption(opts []string, option ctxOptionType) *ContextOptions {
 			c.Service = true
 		case portCtxOption:
 			c.Port = true
+		case zoneCtxOption:
+			c.Zone = true
 		}
 	}
 
@@ -168,6 +175,10 @@ func (c *ContextOptions) getLabels() []string {
 
 	if c.Port {
 		labels = append(labels, prefix+portCtxOption)
+	}
+
+	if c.Zone {
+		labels = append(labels, prefix+zoneCtxOption)
 	}
 
 	return labels
@@ -310,6 +321,15 @@ func (c *ContextOptions) getByDirectionValues(f *flow.Flow, dest bool) []string 
 		}
 	}
 
+	if c.Zone {
+		ip := f.IP.Source
+		if dest {
+			ip = f.IP.Destination
+		}
+		zone := cache.GlobalCache.GetZoneByPodIP(ip)
+		values = append(values, zone)
+	}
+
 	return values
 }
 
@@ -321,6 +341,7 @@ func DefaultCtxOptions() []string {
 		namespaceCtxOption,
 		podCtxOption,
 		workloadCtxOption,
+		zoneCtxOption,
 		// ignoring service option as we have not added right logic around it
 		// TODO add service specific enrichment and logic, #610
 		// serviceCtxOption,

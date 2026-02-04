@@ -23,6 +23,11 @@ type CacheInterface interface {
 	// GetAnnotatedNamespaces returns list of namespaces that are annotated with retina to observe.
 	GetAnnotatedNamespaces() []string
 
+	// GetNodeByName returns the retina node for the given node name.
+	GetNodeByName(nodeName string) *common.RetinaNode
+	// GetZoneByPodIP returns the availability zone for a pod IP.
+	GetZoneByPodIP(ip string) string
+
 	// UpdateRetinaEndpoint updates the retina endpoint in the cache.
 	UpdateRetinaEndpoint(ep *common.RetinaEndpoint) error
 	// UpdateRetinaSvc updates the retina service in the cache.

@@ -1,0 +1,55 @@
+sequenceDiagram
+    participant K as Kernel/eBPF
+    participant P as packetparser Plugin
+    participant E as Enricher
+    participant M as Metrics Module
+    participant PR as Prometheus
+
+    Note over K,P: 1. eBPF Attachment Phase
+    K->>P: Load eBPF programs (EndpointIngress/Egress, HostIngress/Egress)
+    P->>P: Attach clsact qdisc to pod veth & host interfaces
+    P->>P: Subscribe to endpoint events (pod creation/deletion)
+
+    Note over K,P: 2. Packet Capture Loop
+    loop Continuous
+        K->>K: Parse packet (Ethernet/IP/TCP/UDP headers)
+        K->>K: Extract IPs, ports, TCP flags, timestamps
+        K->>K: Optional: conntrack metrics, sampling
+        K->>P: Send via BPF_MAP_TYPE_PERF_EVENT_ARRAY
+    end
+
+    Note over P: 3. Kernel-to-Userspace Transfer
+    par Producer (handleEvents)
+        K->>P: perf_event_output()
+        P->>P: readData() reads from perf array
+        P->>P: Lost events tracking
+        P->>P: Buffer records (channel size: 10000)
+    end
+
+    Note over P: 4. Flow Processing (processRecord workers)
+    par Consumer (2 workers)
+        P->>P: Binary decode raw packet data
+        P->>P: Convert to Cilium Flow protobuf
+        P->>P: Add metadata (traffic direction, TCP flags, packet size)
+        P->>P: Add TCP metadata (seq, ack, tsval, tsecr)
+        P->>P: Increment ParsedPacketsCounter
+    end
+
+    Note over P,E: 5. Enrichment
+    P->>E: Write Event with Flow
+    E->>E: Lookup Kubernetes context
+    E->>E: Add: pod name, namespace, workload, service
+    E->>P: Return enriched Flow
+
+    Note over P,M: 6. Metrics Processing
+    P->>M: Forward enriched Flow to metrics modules
+    par Parallel metrics processing
+        M->>M: forward.go: adv_forward_count, adv_forward_bytes
+        M->>M: tcpflags.go: TCP flag counters
+        M->>M: drops.go: Dropped packet metrics
+        M->>M: tcpretrans.go: TCP retransmissions
+        M->>M: latency.go: API server latency
+        M->>M: dns.go: DNS request/response
+    end
+
+    M->>PR: Export Prometheus metrics

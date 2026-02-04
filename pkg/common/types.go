@@ -40,6 +40,17 @@ type RetinaEndpoint struct {
 	containers  []*RetinaContainer
 	labels      map[string]string
 	annotations map[string]string
+	nodeName    string
+}
+
+// NodeName returns the node name where this endpoint is scheduled.
+func (ep *RetinaEndpoint) NodeName() string {
+	return ep.nodeName
+}
+
+// SetNodeName sets the node name for this endpoint.
+func (ep *RetinaEndpoint) SetNodeName(name string) {
+	ep.nodeName = name
 }
 
 func isIPV4(ipAddress string) bool {
@@ -119,6 +130,7 @@ func RetinaEndpointCommonFromPod(pod *corev1.Pod) *RetinaEndpoint {
 		containers:  []*RetinaContainer{},
 		labels:      pod.Labels,
 		annotations: make(map[string]string),
+		nodeName:    pod.Spec.NodeName,
 	}
 
 	for _, ownerRef := range pod.ObjectMeta.OwnerReferences {
@@ -203,6 +215,7 @@ type OwnerReference struct {
 type RetinaNode struct {
 	name string
 	ip   net.IP
+	zone string
 }
 
 type APIServerObject struct {

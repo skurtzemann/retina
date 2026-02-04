@@ -80,13 +80,56 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	retinaNodeCommon := retinaCommon.NewRetinaNode(node.Name, net.ParseIP(node.Status.Addresses[0].Address))
+	zone := r.extractZoneWithLog(node.Labels, node.Name)
+	retinaNodeCommon := retinaCommon.NewRetinaNode(
+		node.Name,
+		net.ParseIP(node.Status.Addresses[0].Address),
+		zone,
+	)
 	if err := r.cache.UpdateRetinaNode(retinaNodeCommon); err != nil {
 		r.l.Error("Failed to update RetinaNode in Cache", zap.Error(err), zap.String("Node", req.NamespacedName.String()))
 		return ctrl.Result{}, err
 	}
+	r.l.Debug("Updated RetinaNode in Cache",
+		zap.String("node", node.Name),
+		zap.String("zone", zone))
 
 	return ctrl.Result{}, nil
+}
+
+func getLabelKeys(labels map[string]string) []string {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (r *NodeReconciler) extractZoneWithLog(labels map[string]string, node string) string {
+	if labels == nil {
+		r.l.Info("Node has no labels, using fallback zone",
+			zap.String("node", node),
+			zap.String("reason", "labels_is_nil"))
+		return retinaCommon.TopologyZoneLabelFallback
+	}
+	if az, ok := labels[retinaCommon.TopologyZoneLabelGA]; ok {
+		r.l.Info("Found GA zone label on node",
+			zap.String("node", node),
+			zap.String("label", retinaCommon.TopologyZoneLabelGA),
+			zap.String("zone", az))
+		return az
+	}
+	if az, ok := labels[retinaCommon.TopologyZoneLabelBeta]; ok {
+		r.l.Info("Found beta zone label on node (deprecated)",
+			zap.String("node", node),
+			zap.String("label", retinaCommon.TopologyZoneLabelBeta),
+			zap.String("zone", az))
+		return az
+	}
+	r.l.Info("No zone labels found on node",
+		zap.String("node", node),
+		zap.Strings("available_labels", getLabelKeys(labels)))
+	return retinaCommon.TopologyZoneLabelFallback
 }
 
 // SetupWithManager sets up the controller with the Manager.

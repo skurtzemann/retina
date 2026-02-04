@@ -4,18 +4,33 @@ package servermanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"strconv"
 
+	"github.com/microsoft/retina/pkg/controllers/cache"
 	"github.com/microsoft/retina/pkg/log"
 	"github.com/microsoft/retina/pkg/server"
 	"go.uber.org/zap"
 )
 
+const (
+	defaultNodeSampleLimit     = 10
+	defaultEndpointSampleLimit = 10
+	envNodeSampleLimit         = "RETINA_CACHE_NODE_SAMPLE_LIMIT"
+	envEndpointSampleLimit     = "RETINA_CACHE_ENDPOINT_SAMPLE_LIMIT"
+)
+
 type HTTPServer struct {
-	l      *log.ZapLogger
-	host   string
-	port   int
-	router *server.Server
+	l                   *log.ZapLogger
+	host                string
+	port                int
+	router              *server.Server
+	cache               *cache.Cache
+	nodeSampleLimit     int
+	endpointSampleLimit int
 }
 
 func NewHTTPServer(
@@ -29,10 +44,60 @@ func NewHTTPServer(
 	}
 }
 
+func (s *HTTPServer) SetCache(c *cache.Cache) {
+	if c == nil {
+		s.l.Warn("HTTP server cache is nil")
+	} else {
+		s.l.Info("HTTP server cache connected", zap.String("cache_name", c.GetName()))
+	}
+	s.cache = c
+
+	nodeSampleLimit := defaultNodeSampleLimit
+	if v := os.Getenv(envNodeSampleLimit); v != "" {
+		if val, err := strconv.Atoi(v); err == nil && val > 0 {
+			nodeSampleLimit = val
+		}
+	}
+	s.nodeSampleLimit = nodeSampleLimit
+
+	endpointSampleLimit := defaultEndpointSampleLimit
+	if v := os.Getenv(envEndpointSampleLimit); v != "" {
+		if val, err := strconv.Atoi(v); err == nil && val > 0 {
+			endpointSampleLimit = val
+		}
+	}
+	s.endpointSampleLimit = endpointSampleLimit
+}
+
+func (s *HTTPServer) handleCacheDebug(w http.ResponseWriter, r *http.Request) {
+	if s.cache == nil {
+		http.Error(w, "cache not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	stats := s.cache.GetStats()
+
+	response := map[string]interface{}{
+		"cache_stats": stats,
+		"entries": map[string]interface{}{
+			"nodes":     s.cache.GetSampleNodes(s.nodeSampleLimit),
+			"endpoints": s.cache.GetSampleEndpoints(s.endpointSampleLimit),
+		},
+		"validation": s.cache.Validate(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func (s *HTTPServer) Init() error {
 	s.l.Info("Initializing HTTP server ...")
 	rt := server.New(s.l)
 	rt.SetupHandlers()
+
+	// Register debug endpoints
+	rt.AddHandler("/debug/cache", s.handleCacheDebug)
+
 	s.router = rt
 	s.l.Info("HTTP server initialized...")
 	return nil
